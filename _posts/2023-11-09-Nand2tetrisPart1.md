@@ -1,5 +1,5 @@
 ---
-title: "Nand2tetris part 1"
+title: "Nand2tetris Part 1"
 date: 2023-11-09
 ---
 
