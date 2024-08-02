@@ -1690,7 +1690,7 @@ Training the Progressive GAN
 </div>
 <p>The training proces for the PGGAN has two phases, it is related to the growing and the <span class="math inline">\(\alpha\)</span>. So in the first phase we introduce the new layer and <span class="math inline">\(\alpha\)</span> grows from 0-1, increasing linearly after each iteration. Then in the second phase when <span class="math inline">\(\alpha=1\)</span>, we continue training the network with the output being fully from the new layer. Recall, equation (1) for the effect <span class="math inline">\(\alpha\)</span> has on the layers when <span class="math inline">\(\alpha=1\)</span> the effect of the skip connection is 0. The purpose of this scheme is to stabilise the network after having added a new layer. This continues until the model is fully trained.</p>
 <p>To realise this two phase process, I just run the training loop twice per layer training. Also, having covered the Gulrajani case you will see the training loop is almost identical. The differences come from introducing layer_nums, alpha and the two loops to introduce and stabilise the new layers. As such, I reduce the exposition here and advise you to refer to the Gulrajani case.</p>
-<div id="0f626ea6" class="cell" data-scrolled="true">
+<div id="2c6fa77a" class="cell" data-scrolled="true">
 <div class="sourceCode cell-code" id="cb52"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> Generator().to(device)  <span class="co">#&nbsp;The G we train</span></span>
 <span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>d <span class="op">=</span> Discriminator().to(device)</span>
 <span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>g_running <span class="op">=</span> Generator().to(device)  <span class="co">#&nbsp;The G we maintain for creating samples</span></span>
@@ -2168,26 +2168,52 @@ G images</code></pre>
 {"model_id":"cb3f2312dd274d7c86f56321a36ea656","version_major":2,"version_minor":0,"quarto_mimetype":"application/vnd.jupyter.widget-view+json"}
 </script>
 </div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Images after introducing layer: 6
+G images</code></pre>
+</div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Progressive_GAN_files/figure-html/cell-27-output-59.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>G_running images</code></pre>
+</div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Progressive_GAN_files/figure-html/cell-27-output-61.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+<div class="cell-output cell-output-display">
+<script type="application/vnd.jupyter.widget-view+json">
+{"model_id":"9111a23d54ab4c86b988d1078200659a","version_major":2,"version_minor":0,"quarto_mimetype":"application/vnd.jupyter.widget-view+json"}
+</script>
+</div>
 </div>
 <p>There we have it, you’ve implemented the PGGAN let’s give ourselves a pat on the back!</p>
 <p>Look at those beautiful generated faces xD. I’m sure you see some artifacting or issues but they look pretty good dont they? Comparing them to the Gulrajani case, I hope you can see that the progressive growing has it’s benefits (look at the loss plots below for hard proof), the backgrounds are much better handled and the faces look alot more realistic (to me at least). Also, we have seemingly dealt with the low variance of outputs issue. If you want to dig deeper on this, remove the MiniBatch StdDev layer and see how it affects the full case PGGAN this is one way to check if it actually does increase the variance of outputs.</p>
-<p><b>VERIFY THIS FIRST BEFORE PUBLISH&lt; Before moving on, let me point out that the g_running images are exactly identical to the g images. This highlights an important factor of GANs, they are deterministic in that if you if provide the same input you will always get the same output. This fact leads me to believe either my implementation of EMA is incorrect or it has little to no effect.</b></p><b>
+<p><b>VERIFY THIS FIRST BEFORE PUBLISH</b> Before moving on, let me point out that the g_running images are exactly identical to the g images. This highlights an important factor of GANs, they are deterministic in that if you if provide the same input you will always get the same output. This fact leads me to believe either my implementation of EMA is incorrect or it has little to no effect.</p>
 <p>Firstly, in the paper they use differing batch sizes depending on the resolution being generated due to memory constrains, I throw this out in favour of a small batch size. The poinf of throwing it out is for simplicity.</p>
 <p>Secondly, the training process for PGGAN is quite alot quicker than the Gulrajani case and is much more stable. This is an inherent benefit of the PGGAN, the stability comes from the growing. In the early stages there is less information for the network to learn and as such it does a better job of learning the information necessary to create low resolution images. This makes the overall task simpler, we are learning the features in steps rather than asking the network to discover a mapping from 4x4 -&gt; 256x256 in one step. Regarding the speed, the improvement comes from the fact that alot of computation happens at lower resolutions, simply less numbers = faster computation (you can observe this in the progress bar, the it/s decreases as we add more layers and increase the resolution).</p>
 <p>The fact that the full case learns better is due to this introduction of steps, without the growing each layer in the Gulrajani GAN is tasked with simultaneously finding successive representations for both large scale (at low resolutions) and small scale (at high resolutions) details. Growing allows earlier layers to converge early on and reach an optimal point, i.e.&nbsp;a good foundation for successive layers to build upon.</p>
-<div id="573ce59a" class="cell" data-execution_count="52">
-<div class="sourceCode cell-code" id="cb79"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb79-1"><a href="#cb79-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Assuming d_losses and g_losses are lists of GPU tensors</span></span>
-<span id="cb79-2"><a href="#cb79-2" aria-hidden="true" tabindex="-1"></a>d_losses_cpu <span class="op">=</span> [loss.cpu().detach().numpy() <span class="cf">for</span> loss <span class="kw">in</span> d_losses]</span>
-<span id="cb79-3"><a href="#cb79-3" aria-hidden="true" tabindex="-1"></a>g_losses_cpu <span class="op">=</span> [loss.cpu().detach().numpy() <span class="cf">for</span> loss <span class="kw">in</span> g_losses]</span>
-<span id="cb79-4"><a href="#cb79-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb79-5"><a href="#cb79-5" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">5</span>))</span>
-<span id="cb79-6"><a href="#cb79-6" aria-hidden="true" tabindex="-1"></a>plt.plot(d_losses_cpu, label<span class="op">=</span><span class="st">'Discriminator Loss'</span>)</span>
-<span id="cb79-7"><a href="#cb79-7" aria-hidden="true" tabindex="-1"></a>plt.plot(g_losses_cpu, label<span class="op">=</span><span class="st">'Generator Loss'</span>)</span>
-<span id="cb79-8"><a href="#cb79-8" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">'Iterations'</span>)</span>
-<span id="cb79-9"><a href="#cb79-9" aria-hidden="true" tabindex="-1"></a>plt.ylabel(<span class="st">'Loss'</span>)</span>
-<span id="cb79-10"><a href="#cb79-10" aria-hidden="true" tabindex="-1"></a>plt.legend()</span>
-<span id="cb79-11"><a href="#cb79-11" aria-hidden="true" tabindex="-1"></a>plt.title(<span class="st">'Generator and Discriminator Loss Over Time in Full Case'</span>)</span>
-<span id="cb79-12"><a href="#cb79-12" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div id="84007fe9" class="cell" data-execution_count="52">
+<div class="sourceCode cell-code" id="cb81"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb81-1"><a href="#cb81-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Assuming d_losses and g_losses are lists of GPU tensors</span></span>
+<span id="cb81-2"><a href="#cb81-2" aria-hidden="true" tabindex="-1"></a>d_losses_cpu <span class="op">=</span> [loss.cpu().detach().numpy() <span class="cf">for</span> loss <span class="kw">in</span> d_losses]</span>
+<span id="cb81-3"><a href="#cb81-3" aria-hidden="true" tabindex="-1"></a>g_losses_cpu <span class="op">=</span> [loss.cpu().detach().numpy() <span class="cf">for</span> loss <span class="kw">in</span> g_losses]</span>
+<span id="cb81-4"><a href="#cb81-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb81-5"><a href="#cb81-5" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">5</span>))</span>
+<span id="cb81-6"><a href="#cb81-6" aria-hidden="true" tabindex="-1"></a>plt.plot(d_losses_cpu, label<span class="op">=</span><span class="st">'Discriminator Loss'</span>)</span>
+<span id="cb81-7"><a href="#cb81-7" aria-hidden="true" tabindex="-1"></a>plt.plot(g_losses_cpu, label<span class="op">=</span><span class="st">'Generator Loss'</span>)</span>
+<span id="cb81-8"><a href="#cb81-8" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">'Iterations'</span>)</span>
+<span id="cb81-9"><a href="#cb81-9" aria-hidden="true" tabindex="-1"></a>plt.ylabel(<span class="st">'Loss'</span>)</span>
+<span id="cb81-10"><a href="#cb81-10" aria-hidden="true" tabindex="-1"></a>plt.legend()</span>
+<span id="cb81-11"><a href="#cb81-11" aria-hidden="true" tabindex="-1"></a>plt.title(<span class="st">'Generator and Discriminator Loss Over Time in Full Case'</span>)</span>
+<span id="cb81-12"><a href="#cb81-12" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
@@ -2214,10 +2240,10 @@ G images</code></pre>
 <p><a id="14" style="text-decoration: none; color: inherit;" href=""><sup>14</sup></a> So I actually observed this in practise, I made an error in my PixelNorm and had switched the / for a *. This resulted in the norms of the network exploding, the weights dynamic range exploded too and training failed.</p>
 <p><a id="15" style="text-decoration: none; color: inherit;" href=""><sup>15</sup></a> This is to the best of my knowledge, feel free to correct me here. Another reason for the use of Leaky ReLU maybe to reduce sparsity as mentioned in hack 5 @ <a href="https://github.com/soumith/ganhacks">https://github.com/soumith/ganhacks</a></p>
 <p><a id="16" style="text-decoration: none; color: inherit;" href=""><sup>16</sup></a> <a href="https://leimao.github.io/blog/Exponential-Moving-Average/">https://leimao.github.io/blog/Exponential-Moving-Average/</a></p>
-</b></section><b>
-</b></section><b>
+</section>
+</section>
 
-</b></main><b>
+</main>
 <!-- /main column -->
 <script id="quarto-html-after-body" type="application/javascript">
 window.document.addEventListener("DOMContentLoaded", function (event) {
@@ -2644,9 +2670,9 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
   }
 });
 </script>
-</b></div><b> <!-- /content -->
+</div> <!-- /content -->
 
 
 
 
-</b></body></html>
+</body></html>
