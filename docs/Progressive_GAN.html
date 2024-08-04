@@ -908,20 +908,7 @@ The Training Loop
 </div>
 </div>
 <div class="cell-output cell-output-stderr">
-<pre><code>D: -43.4830, G: 28.5494:  57%|█████▋    | 5663/10000 [31:10&lt;24:20,  2.97it/s]Traceback (most recent call last):
-  File "/home/yusuf/anaconda3/envs/gpu_use/lib/python3.11/multiprocessing/util.py", line 300, in _run_finalizers
-    finalizer()
-  File "/home/yusuf/anaconda3/envs/gpu_use/lib/python3.11/multiprocessing/util.py", line 224, in __call__
-    res = self._callback(*self._args, **self._kwargs)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/yusuf/anaconda3/envs/gpu_use/lib/python3.11/multiprocessing/util.py", line 133, in _remove_temp_dir
-    rmtree(tempdir)
-  File "/home/yusuf/anaconda3/envs/gpu_use/lib/python3.11/shutil.py", line 738, in rmtree
-    onerror(os.rmdir, path, sys.exc_info())
-  File "/home/yusuf/anaconda3/envs/gpu_use/lib/python3.11/shutil.py", line 736, in rmtree
-    os.rmdir(path, dir_fd=dir_fd)
-OSError: [Errno 39] Directory not empty: '/tmp/pymp-y1hw6u2c'
-D: -31.9647, G: 38.9928:  60%|█████▉    | 5999/10000 [33:02&lt;21:44,  3.07it/s]</code></pre>
+<pre><code>D: -31.9647, G: 38.9928:  60%|█████▉    | 5999/10000 [33:02&lt;21:44,  3.07it/s]</code></pre>
 </div>
 <div class="cell-output cell-output-display">
 <div>
@@ -2295,6 +2282,8 @@ G images</code></pre>
 <p><a id="15" style="text-decoration: none; color: inherit;" href=""><sup>15</sup></a> This is to the best of my knowledge, feel free to correct me here. Another reason for the use of Leaky ReLU maybe to reduce sparsity as mentioned in hack 5 @ <a href="https://github.com/soumith/ganhacks">https://github.com/soumith/ganhacks</a></p>
 <p><a id="16" style="text-decoration: none; color: inherit;" href=""><sup>16</sup></a> <a href="https://leimao.github.io/blog/Exponential-Moving-Average/">https://leimao.github.io/blog/Exponential-Moving-Average/</a></p>
 <p><a id="17" style="text-decoration: none; color: inherit;" href=""><sup>17</sup></a> You can find out more about gradient based learning in this great video by Andrej Karpathy <a href="https://www.youtube.com/watch?v=VMj-3S1tku0">https://www.youtube.com/watch?v=VMj-3S1tku0</a></p>
+<hr>
+<p>Acknowledgement’s for help and</p>
 </section>
 
 </main>
