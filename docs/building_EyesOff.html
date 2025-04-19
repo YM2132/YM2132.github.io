@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.4.554">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Yusuf Mohammad">
+<meta name="dcterms.date" content="2025-04-19">
+
+<title>EyesOff: How I Built A Privacy macOS App Using Local ML Models</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="building_EyesOff_files/libs/clipboard/clipboard.min.js"></script>
+<script src="building_EyesOff_files/libs/quarto-html/quarto.js"></script>
+<script src="building_EyesOff_files/libs/quarto-html/popper.min.js"></script>
+<script src="building_EyesOff_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="building_EyesOff_files/libs/quarto-html/anchor.min.js"></script>
+<link href="building_EyesOff_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="building_EyesOff_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="building_EyesOff_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="building_EyesOff_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="building_EyesOff_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Contents</h2>
+   
+  <ul>
+  <li><a href="#eyesoff---a-need-for-privacy" id="toc-eyesoff---a-need-for-privacy" class="nav-link active" data-scroll-target="#eyesoff---a-need-for-privacy">EyesOff - A Need for Privacy</a>
+  <ul>
+  <li><a href="#a-small-local-neural-network---yunet" id="toc-a-small-local-neural-network---yunet" class="nav-link" data-scroll-target="#a-small-local-neural-network---yunet">A Small Local Neural Network - YuNet</a></li>
+  <li><a href="#accelerating-building-with-ai" id="toc-accelerating-building-with-ai" class="nav-link" data-scroll-target="#accelerating-building-with-ai">Accelerating Building with AI</a></li>
+  <li><a href="#packaging-a-mac-application-for-distribution" id="toc-packaging-a-mac-application-for-distribution" class="nav-link" data-scroll-target="#packaging-a-mac-application-for-distribution">Packaging a Mac Application for Distribution</a>
+  <ul class="collapse">
+  <li><a href="#codesigning-and-notarization" id="toc-codesigning-and-notarization" class="nav-link" data-scroll-target="#codesigning-and-notarization">Codesigning and Notarization</a></li>
+  <li><a href="#distributing-eyesoff" id="toc-distributing-eyesoff" class="nav-link" data-scroll-target="#distributing-eyesoff">Distributing EyesOff</a></li>
+  </ul></li>
+  <li><a href="#future-plan-for-eyesoff" id="toc-future-plan-for-eyesoff" class="nav-link" data-scroll-target="#future-plan-for-eyesoff">Future Plan for EyesOff</a></li>
+  </ul></li>
+  </ul>
+<div class="quarto-other-links"><h2>Other Links</h2><ul><li><a href="https://ym2132.github.io/" target="_blank"><i class="bi bi-link-45deg"></i>Yusuf's Deep Learning Blog</a></li><li><a href="https://github.com/YM2132?tab=repositories" target="_blank"><i class="bi bi-link-45deg"></i>Yusuf's GitHub</a></li><li><a href="https://www.eyesoff.app" target="_blank"><i class="bi bi-link-45deg"></i>EyesOff.app</a></li></ul></div><div class="quarto-code-links"><h2>Code Links</h2><ul><li><a href="https://github.com/YM2132/EyesOff" target="_blank"><i class="bi bi-file-code"></i>EyesOff Source Code</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">EyesOff: How I Built A Privacy macOS App Using Local ML Models</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Yusuf Mohammad </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">April 19, 2025</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<hr>
+<section id="eyesoff---a-need-for-privacy" class="level2">
+<h2 class="anchored" data-anchor-id="eyesoff---a-need-for-privacy">EyesOff - A Need for Privacy</h2>
+<p>We’ve all felt the uncomfortable moment we catch someone glancing at (or worse watching) our laptop screen, whether at a coffee shop, on a flight or while in the library. As we choose to work from a wider variety of spaces, these privacy concerns will only grow. It’s out of this context that I developed EyesOff, which utilises your onboard webcam and a locally running neural network to alert you when anyone is looking at your screen! The best part is, with EyesOff you are fully in charge of your privacy, your data is all processed locally without ever being sent to the cloud<a href="#1"><sup>1</sup></a>.</p>
+<p>The app is quite simple: EyesOff creates a live video stream from your webcam and passes the frames to a locally running Neural Network (NN) called YuNet. This model processes the images to detect faces, and if the number of faces exceeds your chosen threshold, EyesOff notifies you by displaying an alert on your screen. The threshold lets you control how many people can view your screen without triggering an alert. For example, if threshold=1, when only you are looking at your screen there will be no alert, but as soon as someone else enters the frame, YuNet identifies two faces and EyesOff immediately notifies you.</p>
+<p>There are a few steps in developing an application for Mac and we will discuss them in no particular order in this post. Feel free to jump around the post each will be self-contained with an overall theme of the EyesOff app.</p>
+<section id="a-small-local-neural-network---yunet" class="level3">
+<h3 class="anchored" data-anchor-id="a-small-local-neural-network---yunet">A Small Local Neural Network - YuNet</h3>
+<p>In the current zeitgeist small models have fallen out of favour (with a lot of emphasis being placed on scale), however YuNet and EyesOff showcase a perfect example of where they still matter. There are usually two approaches when using NNs in your development, either run the model locally or make a call to some API and have the model run on someone else’s servers. The second approach has two issues, firstly you must send your data to an external vendor and waiting for the API response is too slow for an application like EyesOff, because if an alert is made but the person has already left the frame EyesOff is useless.</p>
+<p>Nonetheless, local models do have one big issue (especially small ones), they tend to underperform the large models. This is a tradeoff between performance and the ability of a model to complete harder tasks. Still, we are left with little choice here, running a larger model is too prohibitive for EyesOff. We cannot create an app which ends up using 80% of your CPU and RAM, draining your battery in the process. EyesOff is designed to be low impact on your machine.</p>
+<p>In steps YuNet, a very small Neural Network (NN) with only 75,856 parameters, making it extremely lightweight<a href="#2"><sup>2</sup></a>. As a result EyesOff can run in the background with little impact on battery and CPU usage. Furthermore, despite it’s size its an extremely strong model. YuNet is able to detect faces which occupy as little as 10x10 <a href="#3"><sup>3</sup></a> pixels which really helps with long range detections (keeping peeping eyes away from a distance!). YuNet accepts as input images of size 340x340, so it can detect a face which occupies as little as 0.08% of the input image (<span class="math inline">\((10*10)/(340*340)\)</span>). In contrast BlazeFace from Google’s MediaPipe cannot make detections at ranges greater than 2 meters which was a big limitation in EyesOff, as I had started development using MediaPipe<a href="#4"><sup>4</sup></a>.</p>
+<p>Lastly, YuNet is fully open source, which aligns perfectly with the transparency needed for privacy-focused applications. You can check out the research paper here: <a href="https://link.springer.com/article/10.1007/s11633-023-1423-y">https://link.springer.com/article/10.1007/s11633-023-1423-y</a>.</p>
+<p>This combination of being lightweight, effective, and open source makes YuNet ideal for privacy-centric applications. After all, what use would a privacy-based app be if it sent your data across the web? Small models that can run locally give us back control over our data, which is priceless<a href="#5"><sup>5</sup></a>. But, large models certainly have their place and can perform many tasks that are currently beyond the capabilities of smaller models. However, this doesn’t mean we should always have to sacrifice our privacy and data to benefit from this remarkable technology.</p>
+</section>
+<section id="accelerating-building-with-ai" class="level3">
+<h3 class="anchored" data-anchor-id="accelerating-building-with-ai">Accelerating Building with AI</h3>
+<p>Speaking of large models and their place, one area in which they excel is code generation. This ability of Large Language Models (LLMs) has been increasing at such a fast pace that I wanted to test it out when building EyesOff.</p>
+<p>Some context - I began development of this app many months ago, however I dropped the project as I wasn’t familiar with PyQt (used for the GUI) and did not have much time to pick it up. So, when I heard that Anthropic released Claude Code<a href="#6"><sup>6</sup></a>, a coding tool which utilises the Claude models, I knew I needed to test it out with building EyesOff.</p>
+<p>From a short prompt I built the underlying framework of EyesOff. Pretty much all of the groundwork was completed by Claude Code, in just a few hours it had completed something which would have taken me months! Honestly, this was quite a sobering moment, however with time I realised the beauty of it all. This tool, had allowed me to develop something from an idea and I think this is amazing as AI can act as a tool for true empowerment. Now the goal of us developers is to utilise the tools given to build, build, build!</p>
+<p>Tools like Cursor<a href="#7"><sup>7</sup></a>, Claude Code and others all allow us to build much faster… <b>Note</b>, I still think for those learning it’s best to proceed without these tools, however it’s a different story when you’re trying to build. The goal in building any piece of software should always be to provide value for the end user<a href="#8"><sup>8<sup></sup></sup></a> and I think AI allows us to get value for end users much quicker. How we get to that value doesn’t really matter, whether you use Python, Java, C++ or assembly, whether or not you use the most optimal algorithms, when it comes down to it none of this matters to the end user. What that means is AI empowers us to do more with the limited time we have. We can develop more of our ideas, quickly get them out to users and iterate on our designs - remember not all ideas are good ideas, the only way to know which are the good and the bad is to get them out to users, with AI we can do this at an exponentially fast pace.</p>
+<p>From a technical perspective, working with LLMs while coding is relatively simple now. You can install tools like Cursor or Claude code and get started right away. In this app I found the LLM performed the best at the start of the project, however as things got more complex it’s ability to make logical changes reduced. I’d sometimes give the tool a prompt to make a seemingly simple change, it’d come back with a whole bunch of files edited and it wouldn’t even implement what I had asked it to. I’d also recommend you review the code changes being made, inspecting imports and links to external resources are especially important. Alas, there was nothing that me + Claude Code could not do, and I think this is where the true power lies (for now).</p>
+</section>
+<section id="packaging-a-mac-application-for-distribution" class="level3">
+<h3 class="anchored" data-anchor-id="packaging-a-mac-application-for-distribution">Packaging a Mac Application for Distribution</h3>
+<p>At this point EyesOff is a (small) fully fledged python project, how can we convert that into a package which people can use easily? <b>Note</b>, at the time of writing my application only supports macOS, I hope to add other OS’s soon, as such this guide is specifically for macOS applications.</p>
+<p>There are a few steps involved, but it all boils down to visiting the <a href="developer.apple.com">developer.apple.com</a> website and some bash commands. I started with a very useful library called Encrust<a href="#9"><sup>9</sup></a> which provides a walk through guide on how to get your dev environment setup to publish your app. When you install Encrust you can run the command “encrust configure” which gives you the following instructions:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="building_EyesOff_files/figure-html/cb9db3e2-6aba-43f7-9447-b27f36723e00-1-0d0f0623-1e35-4bc5-ba19-2bd5fe7e75d4.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1 - Output of encrust configure</figcaption>
+</figure>
+</div>
+<p>Encrust is setup to work with a library called py2app, which does exactly what it says on the tin, taking your python source code and creating a .app file. <b>Note</b> that it costs roughly $100 or £80 to get an apple developer account, however it is necessary to notarise and code sign your app, which itself is necessary to stop the warning that macOS throws when an app is not code signed:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="building_EyesOff_files/figure-html/ea42bc7a-9cb7-42e1-8e2b-6e3b15c37a3c-1-8d3039e4-8c97-4e6b-a4ae-d89885646237.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2 - Example dialogue if you don’t codesign/notarize your app</figcaption>
+</figure>
+</div>
+<p>If you are just developing an app for yourself or a few friends you can certainly get around this warning, head to Settings and in privacy you will see an option to allow running of whatever your app is called. However, it’s not acceptable to get such a warning if you are releasing your app to the masses.</p>
+<p>On using encrust, once you run encrust auth you will get a whole bunch of popups to enter your password, it may seem like nothing is happening but as you enter and submit each one view your terminal and you will see progress being made. These popups are accessing the keychain to get your Apple developer certificate required for code signing and notarisation. Eventually, you’ll end up with a folder called /dist, within that is a .app file which you can run! Depending upon the packages you used, this .app file may or may not be large in size. For example my first .app for EyesOff was around 600mb which doesn’t make sense for such a small and simple app. The large size of the .app file is a result of all the Python dependencies being bundled within the .app directory, this is necessary to ensure your app will run on any users machine (where they may or may not have the dependencies installed). This is one area where py2app didn’t perform so well, it seems to be unable to distinguish between modules you have and have not used in your imported libraries. E.g. I made use of PyQt but only a few of the core modules nowhere near the entire thing but py2app would just throw the whole of PyQt into my .app, which resulted in the ballooning and similarly for numpy.</p>
+<p>Now, this may or may not have been caused by me. I say this as when you use py2app you get access to a setup.py file and in this file you can specify what resources you want to include in your .app. I had to include things like my NN model files, you also have access to a “settings” section, in which it is possible to include or exclude files. I tried to exclude some of the files in Python modules however I don’t think it works as expected. The “exclude” section is probably meant to work with files/folders in your python project directory rather than being use to explicitly remove certain modules in the dependencies. This was evidenced by the fact that whole libraries and all their dependencies were being included in the .app despite my explicit references in the “exclude” section of my setup.py. I read that pyinstaller<a href="#10"><sup>10</sup></a> handles dependencies better, by actually looking at which parts of libraries you have and have not used in your code. For that reason I went with pyinstaller to create my final app bundle.</p>
+<p>Now I will show you my full list of commands to get a .dmg file. A .dmg file is a disk image file and is usually how a lot of Mac apps are distributed. It allows users to quickly download and install your app in the proper manner (moving the app to applications, code checking etc):</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Commands to create a code signed and notarized DMG file ready for distribution
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><b>TODO: Replace all sections within {…}</b></p>
+<p><b>Step 0: Run pyinstaller to create the dist directory with the .app file</b></p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pyinstaller</span> EyesOff.spec</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><b>Step 1: Code sign your app + entitlements</b></p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">codesign</span> <span class="at">--deep</span> <span class="at">--force</span> <span class="at">--options</span> runtime <span class="at">--entitlements</span> EyesOff.entitlements <span class="dt">\</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--sign</span> <span class="st">"Developer ID Application: {Apple ID Name} ({YOUR_TEAM_ID})"</span> <span class="st">"dist/{Your app name}.app"</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><b>Step 2: Create a ZIP archive for notarization</b></p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ditto</span> <span class="at">-c</span> <span class="at">-k</span> <span class="at">--keepParent</span> <span class="st">"dist/{Your app name}.app"</span> <span class="st">"{Your app name}.zip"</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><b>Step 3: Submit for notarization (using your stored profile)</b></p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">xcrun</span> notarytool submit {Your app name}.zip <span class="at">--keychain-profile</span> {Your keychain profile name} <span class="at">--wait</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><b>Step 4: After successful notarization, staple the ticket to your app</b></p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">xcrun</span> stapler staple <span class="st">"dist/{Your app name}.app"</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><b>Step 5: Create temporary directory for DMG contents</b></p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /tmp/dmg-contents</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><b>Step 6: Copy the notarized app to the temporary directory</b></p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> <span class="at">-R</span> <span class="st">"dist/{Your app name}.app"</span> /tmp/dmg-contents/</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><b>Step 7: Create the DMG</b> <em>Note: Install create-dmg with <code>brew install create-dmg</code> if needed</em></p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">create-dmg</span> <span class="dt">\</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--volname</span> <span class="st">"EyesOff"</span> <span class="dt">\</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--volicon</span> <span class="st">"{the path to your icns file}/MyIcon.icns"</span> <span class="dt">\</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--window-pos</span> 200 120 <span class="dt">\</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--window-size</span> 800 400 <span class="dt">\</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--icon-size</span> 100 <span class="dt">\</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">--icon</span> <span class="st">"{Your app name}.app"</span> 200 190 <span class="dt">\</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">--app-drop-link</span> 600 185 <span class="dt">\</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">--no-internet-enable</span> <span class="dt">\</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="st">"./{Your app name}.dmg"</span> <span class="dt">\</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  <span class="st">"/tmp/dmg-contents/"</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><b>Step 8: Sign the DMG</b></p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">codesign</span> <span class="at">--sign</span> <span class="st">"Developer ID Application: {Apple ID Name} ({YOUR_TEAM_ID})"</span> <span class="dt">\</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--options</span> runtime ./{Your app name}.dmg</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><b>Step 9: Notarize the DMG</b></p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">xcrun</span> notarytool submit ./{Your app name}.dmg <span class="at">--keychain-profile</span> {Your keychain profile name} <span class="at">--wait</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><b>Step 10: Staple the notarization ticket to the DMG</b></p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">xcrun</span> stapler staple ./{Your app name}.dmg</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</div>
+<p>And there you have it, a fully fledged .app and .dmg file which can be distributed to others with ease (we are only 100$ shorter than we started xD).</p>
+<section id="codesigning-and-notarization" class="level4">
+<h4 class="anchored" data-anchor-id="codesigning-and-notarization">Codesigning and Notarization</h4>
+<p>Codesigning is a macOS security process in which you certify that your app was created by you.[https://developer.apple.com/documentation/security/code-signing-services] After signing your app, the system can detect changes to the source code ensuring it doesn’t get changed maliciously and keeping the user safe. Next up you need to notarize your app, notarization includes Apple checking your app file for malicious intent/content and checks if your code signing worked as intended. Notarization is what prevents Figure 2 from occurring when a user downloads your app, once notarized when installing your app will display the following dialogue:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="building_EyesOff_files/figure-html/985e7d79-c610-434d-b75c-dbbaf747a050-1-e09715ad-524c-4d7a-b112-f54d672558f4.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3 - The dialogue after your app is code signed and notarized</figcaption>
+</figure>
+</div>
+<p>Which is a lot more friendly :)</p>
+<p>Keep in mind, that you must code sign and notarize both your .app and your dmg file. Also, my commands here are what worked for me, you may need to edit the settings especially for the create-dmg command. If you have any trouble feel free to send me an email<a href="#11"><sup>11</sup></a></p>
+</section>
+<section id="distributing-eyesoff" class="level4">
+<h4 class="anchored" data-anchor-id="distributing-eyesoff">Distributing EyesOff</h4>
+<p>To distribute the app I considered a couple of options, I began with Cloudflare. I had already used their domain registry service to purchase my .app domain and planned on using Cloudflare Pages<a href="#12"><sup>12</sup></a> to host the site as it’s quite simple, convenient and cheap (if you know of any better ones do let me know). So I looked into Cloudflare workers with R2 storage (Cloudflare’s alternative to amazon S3 buckets). Essentially, you create an R2 bucket, upload your .dmg file to it and then hook it up to a worker which accepts a GET request and has a defined behaviour upon receiving a GET - the behaviour being to return the .dmg file for download. This is all free up to a certain point, however I faced some issues with the Cloudflare dashboard, it would keep freezing when I tried to edit my worker, it is possible to edit locally but this moment made me realise that perhaps I had over complicated things.</p>
+<p>Taking a step back I settled on a much simpler approach to handle releases. I am now using GitHub releases<a href="#13"><sup>13</sup></a>! It’s a straightforward method to setup: create a GitHub repo, navigate to releases (found on the right hand side panel), upload your release with a version number and a short description and that’s it! It’s a very neat way to keep everything in one place. GitHub releases can be created on both open source and closed source apps. For a closed source app you can create an empty GitHub repo and upload only your release .dmg file for distribution.</p>
+</section>
+</section>
+<section id="future-plan-for-eyesoff" class="level3">
+<h3 class="anchored" data-anchor-id="future-plan-for-eyesoff">Future Plan for EyesOff</h3>
+<p>I have many ideas to improve the app from UI development, to underlying model changes. One big one is creating versions which work on Windows, Linux and older Macs. <a href="https://www.eyesoff.app">https://www.eyesoff.app</a> has a development roadmap, feel free to contribute on the GitHub :)</p>
+<hr>
+<p><a id="1" style="text-decoration: none; color: inherit;" href=""><sup>1</sup></a> Now, there are other methods to stop these sorts of intrusions, such as privacy screens. However, they can face some issues such as: getting lost, getting damaged, being expensive or making it difficult for others to see your screen as in if you want your friends to look at something on your laptop it can be a challenge. These make up some of the practical reasons to build and use a tool like EyesOff.</p>
+<p><a id="2" style="text-decoration: none; color: inherit;" href=""><sup>2</sup></a> To get an idea for how small this truly is, the “small” language models we discuss these days are often around 3-7billion parameters. These models require at least a 24GB GPU to run and take a lot of power, whereas YuNet can run on a regular CPU efficiently enough to be unnoticeable.</p>
+<p><a id="3" style="text-decoration: none; color: inherit;" href=""><sup>3</sup></a> OpenCV provide code to run YuNet and many other models simply in their zoo: <a href="https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet">https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet</a></p>
+<p><a id="4" style="text-decoration: none; color: inherit" href=""><sup>4</sup></a> <a href="https://ai.google.dev/edge/mediapipe/solutions/guide">MediaPipe</a> is a library of small local models offered by Google. They cover a range of tasks and are quite good. They have a model called BlazeFace which I used during the early stages of EyesOff. However, it only covered short range detections. They had a long range version which was scheduled for release, however it has been marked as coming soon for over a year, so I’m not sure it ever will be released.</p>
+<p><a id="5" style="text-decoration: none; color: inherit" href=""><sup>5</sup></a> Running models locally can be enabled by two main things, making compute cheaper and more accessible or by making models smaller. On the latter nowadays there are a few ways to do this, we can even take larger models and reduce the memory requirements needed to run them. e.g.&nbsp;look at libraries such as <a href="https://docs.unsloth.ai">https://docs.unsloth.ai</a>, they provide the framework to get large models running on your hardware! YuNet fits neatly into the first category however, the authors made a very strong model which is incredibly small.</p>
+<p><a id="6" style="text-decoration: none; color: inherit;" href=""><sup>6</sup></a> <a href="https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview">https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview</a></p>
+<p><a id="7" style="text-decoration: none; color: inherit;" href=""><sup>7</sup></a> <a href="https://www.cursor.com/en">https://www.cursor.com/en</a></p>
+<p><a id="8" style="text-decoration: none; color: inherit;" href=""><sup>8</sup></a> <a href="https://www.youtube.com/watch?v=I845O57ZSy4">As stated by John Carmack in his Lex Fridman podcast</a></p>
+<p><a id="9" style="text-decoration: none; color: inherit;" href=""><sup>9</sup></a> <a href="https://github.com/glyph/Encrust">https://github.com/glyph/Encrust</a> The author also has a deep dive on publishing a Python macOS app. It goes into a lot greater depth than this blog: <a href="https://blog.glyph.im/2023/03/py-mac-app-for-real.html">https://blog.glyph.im/2023/03/py-mac-app-for-real.html</a></p>
+<p><a id="10" style="text-decoration: none; color: inherit;" href=""><sup>10</sup></a> <a href="https://pyinstaller.org/en/stable/">https://pyinstaller.org/en/stable/</a></p>
+<p><a id="11" style="text-decoration: none; color: inherit;" href=""><sup>11</sup></a> Feel free to send an email if you need help setting up your mac app @ <a href="mailto:y%75sufmohamma%64@l%69ve.com">yusufmohammad@live.com</a></p><a href="mailto:y%75sufmohamma%64@l%69ve.com">
+</a><p><a href="mailto:y%75sufmohamma%64@l%69ve.com"></a><a id="12" style="text-decoration: none; color: inherit;" href=""><sup>12</sup></a> <a href="https://pages.cloudflare.com">https://pages.cloudflare.com</a></p>
+<p><a id="13" style="text-decoration: none; color: inherit;" href=""><sup>13</sup></a> <a href="https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases">https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases</a></p>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+          // target, if specified
+          link.setAttribute("target", "_blank");
+          if (link.getAttribute("rel") === null) {
+            link.setAttribute("rel", "noopener");
+          }
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
