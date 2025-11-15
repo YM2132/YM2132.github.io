@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.4.554">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Yusuf Mohammad">
+<meta name="dcterms.date" content="2025-11-13">
+
+<title>EyesOff: How I Built A Screen Contact Detection Model</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="building_EyesOff_part2_model_training_files/libs/clipboard/clipboard.min.js"></script>
+<script src="building_EyesOff_part2_model_training_files/libs/quarto-html/quarto.js"></script>
+<script src="building_EyesOff_part2_model_training_files/libs/quarto-html/popper.min.js"></script>
+<script src="building_EyesOff_part2_model_training_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="building_EyesOff_part2_model_training_files/libs/quarto-html/anchor.min.js"></script>
+<link href="building_EyesOff_part2_model_training_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="building_EyesOff_part2_model_training_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="building_EyesOff_part2_model_training_files/libs/quarto-html/quarto-syntax-highlighting-dark.css" rel="prefetch" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<script src="building_EyesOff_part2_model_training_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="building_EyesOff_part2_model_training_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="building_EyesOff_part2_model_training_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="building_EyesOff_part2_model_training_files/libs/bootstrap/bootstrap-dark.min.css" rel="prefetch" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Contents</h2>
+   
+  <ul>
+  <li><a href="#why-do-i-need-a-custom-model" id="toc-why-do-i-need-a-custom-model" class="nav-link active" data-scroll-target="#why-do-i-need-a-custom-model">Why Do I Need a Custom Model?</a></li>
+  <li><a href="#overcoming-the-lack-of-data" id="toc-overcoming-the-lack-of-data" class="nav-link" data-scroll-target="#overcoming-the-lack-of-data">Overcoming the Lack of Data</a></li>
+  <li><a href="#building-the-custom-dataset" id="toc-building-the-custom-dataset" class="nav-link" data-scroll-target="#building-the-custom-dataset">Building the Custom Dataset</a>
+  <ul>
+  <li><a href="#first-steps" id="toc-first-steps" class="nav-link" data-scroll-target="#first-steps">First Steps</a></li>
+  <li><a href="#developing-a-consistent-labelling-framework" id="toc-developing-a-consistent-labelling-framework" class="nav-link" data-scroll-target="#developing-a-consistent-labelling-framework">Developing a Consistent Labelling Framework</a></li>
+  <li><a href="#start-of-the-vcd-dataset" id="toc-start-of-the-vcd-dataset" class="nav-link" data-scroll-target="#start-of-the-vcd-dataset">Start of the VCD Dataset</a></li>
+  </ul></li>
+  <li><a href="#training-the-eyesoff-model" id="toc-training-the-eyesoff-model" class="nav-link" data-scroll-target="#training-the-eyesoff-model">Training the EyesOff Model</a>
+  <ul>
+  <li><a href="#model-choice" id="toc-model-choice" class="nav-link" data-scroll-target="#model-choice">Model Choice</a></li>
+  <li><a href="#training-the-eyesoff-model---a-two-stage-approach" id="toc-training-the-eyesoff-model---a-two-stage-approach" class="nav-link" data-scroll-target="#training-the-eyesoff-model---a-two-stage-approach">Training the EyesOff Model - A Two Stage Approach</a>
+  <ul class="collapse">
+  <li><a href="#phase-1" id="toc-phase-1" class="nav-link" data-scroll-target="#phase-1">Phase 1</a></li>
+  <li><a href="#phase-2" id="toc-phase-2" class="nav-link" data-scroll-target="#phase-2">Phase 2</a></li>
+  </ul></li>
+  </ul></li>
+  <li><a href="#evaluating-the-eyesoff-model" id="toc-evaluating-the-eyesoff-model" class="nav-link" data-scroll-target="#evaluating-the-eyesoff-model">Evaluating the EyesOff Model</a>
+  <ul>
+  <li><a href="#testing-dataset-splits" id="toc-testing-dataset-splits" class="nav-link" data-scroll-target="#testing-dataset-splits">Testing Dataset Splits</a></li>
+  <li><a href="#getting-more-data" id="toc-getting-more-data" class="nav-link" data-scroll-target="#getting-more-data">Getting More Data</a></li>
+  <li><a href="#re-evaluating-the-model" id="toc-re-evaluating-the-model" class="nav-link" data-scroll-target="#re-evaluating-the-model">Re-evaluating the Model</a>
+  <ul class="collapse">
+  <li><a href="#evaluation-tables" id="toc-evaluation-tables" class="nav-link" data-scroll-target="#evaluation-tables">Evaluation Tables</a></li>
+  </ul></li>
+  </ul></li>
+  <li><a href="#next-steps" id="toc-next-steps" class="nav-link" data-scroll-target="#next-steps">Next Steps</a></li>
+  </ul>
+<div class="quarto-other-links"><h2>Other Links</h2><ul><li><a href="https://ym2132.github.io/" target="_blank"><i class="bi bi-link-45deg"></i>Yusuf's Deep Learning Blog</a></li><li><a href="https://github.com/YM2132?tab=repositories" target="_blank"><i class="bi bi-link-45deg"></i>Yusuf's GitHub</a></li><li><a href="https://www.eyesoff.app" target="_blank"><i class="bi bi-link-45deg"></i>EyesOff.app</a></li></ul></div><div class="quarto-code-links"><h2>Code Links</h2><ul><li><a href="https://github.com/YM2132/EyesOff" target="_blank"><i class="bi bi-file-code"></i>EyesOff Source Code</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">EyesOff: How I Built A Screen Contact Detection Model</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Yusuf Mohammad </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">November 13, 2025</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<hr>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+TLDR
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-1" class="callout-1-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>I trained a model for my app EyesOff, which detects when people are looking at your screen to protect you from shoulder surfing. With no existing dataset for this task, I hand-labelled 20k+ images for training and created synthetic gaze labels for pre-training. The final model achieves ~71% accuracy across close and mid-range distances.</p>
+</div>
+</div>
+</div>
+<section id="why-do-i-need-a-custom-model" class="level3">
+<h3 class="anchored" data-anchor-id="why-do-i-need-a-custom-model">Why Do I Need a Custom Model?</h3>
+<p>For the past 3 months I have been working to create a model to detect whether or not someone is looking at a screen. This blog recounts the steps I took to train such a model.</p>
+<p>I am building this model for <a href="https://www.eyesoff.app">EyesOff</a>. It’s an application which detects people looking at your screen. The aim is to keep you safe from shoulder surfing, utilising your webcam to give you the power to prevent snoopers.</p>
+<p>The first model I considered for the app was the Eye-Contact-CNN<a href="#1"><sup>1</sup></a>, which was trained to detect eye contact in children. However, due to its license I cannot use it in EyesOff. Also, this model is too restrictive, as it only classifies as looking if the person looks directly at the camera. Making the Eye-Contact-CNN too specific for EyesOff.</p>
+<p>Nevertheless, I am grateful to the authors as their paper is immensely useful in detailing its approach. Because I could not use it out of the box, it led me on a journey to build my own dataset &amp; model.</p>
+<hr>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-2-contents" aria-controls="callout-2" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+The Other Approaches I Tried
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-2" class="callout-2-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>Before deciding to build a custom deep learning model I tried a number of different approaches, I won’t go in to details here but feel free to reach out if you want to know more on any of these approaches<a href="#7"><sup>7</sup></a>. Here’s a quick list:</p>
+<pre><code>- eye-contact-cnn - it was too restrictive in boundaries for detection.
+- mediapipe - I tried to use landmarks and headpose as heuristic 
+  approximations, setting thresholds for looking and not looking,
+  but this was too fragile.
+- gaze detection + estimation models - another approach of setting 
+  manual thresholds for angles which were looking at the screen.
+  I also considered a calibration based approach, e.g. show the user some
+  calibration spots and use that to build the bounds of their screen.
+  This works for the main user, but breaks down when the algorithm see's
+  a head in a position other than the one it was callibrated on (e.g.
+  a shoulder surfer). Also, I do not want to expose users to a
+  calibration flow, I want the user of EyesOff to have a smooth experience.
+  </code></pre>
+</div>
+</div>
+</div>
+</section>
+<section id="overcoming-the-lack-of-data" class="level2">
+<h2 class="anchored" data-anchor-id="overcoming-the-lack-of-data">Overcoming the Lack of Data</h2>
+<p>The biggest problem in this whole process was the <b>lack of data</b>. This was my first time training a model for a task which hasn’t been performed before. As such, no dataset (that I could find) has been created for such a task. Many face datasets exist but none with the correct labels that I need. The task itself is a binary classification task in which the model predicts whether a person is looking or not looking at the screen.</p>
+</section>
+<section id="building-the-custom-dataset" class="level2">
+<h2 class="anchored" data-anchor-id="building-the-custom-dataset">Building the Custom Dataset</h2>
+<section id="first-steps" class="level3">
+<h3 class="anchored" data-anchor-id="first-steps">First Steps</h3>
+<p>Given the lack of data, I had to come up with my own dataset. I started by thinking I could only use images of people using their laptops, as this would be the closest to what the model would see in production. However, this type of data was quite hard to come by. In fact, all I need is people in the image that are facing towards the camera, as this is essentially what the webcam will see. I.e. we take images with people in them and assume that the camera is a webcam at the top of an imaginary display. This allowed me to widen the range of possible data I could use.</p>
+<p>Initially, I thought I could do this with images of myself + my friends however I quickly realised this would create issues in terms of generalisability. To get over this I started looking for face datasets which I would label myself.</p>
+<p>As a test, I took the FFHQ dataset, having come across it during GAN training. I went through and manually labelled a subset of FFHQ (4900 images) to test my hypothesis. To my eye it worked ok, however it failed on a small test set of images taken of myself. I figured this was because the FFHQ images are quite unlike real life images, Nvidia applied very heavy augmentations to them, making them look a little weird. So, the next step was to find images which looked real.</p>
+<p>Again I began looking for gaze datasets but didn’t find much which were easily accessible (GazeFace, MPIIGaze etc require you to sign up to receive and my requests weren’t replied to). Until I found the selfie dataset<a href="#2"><sup>2</sup></a> on Kaggle. This was a great starting point, from this I took and labelled 3400 images. However, given the dataset is of selfies, a lot of the time faces were occluded by phones, or eyes were looking at the phones, so the data wasn’t the best for my use case. I did try labelling only images without phones in, but it didn’t help.</p>
+</section>
+<section id="developing-a-consistent-labelling-framework" class="level3">
+<h3 class="anchored" data-anchor-id="developing-a-consistent-labelling-framework">Developing a Consistent Labelling Framework</h3>
+<p>A lot of time was spent on developing my labelling framework - i.e.&nbsp;how can I consistently label 1000s of images. I had to iron out “the boundary for someone looking at the screen”. I decided to follow the Eye-Contact-CNN paper closely, meaning labelling as looking = directly at the camera or slightly around it, rather than “in the general direction” which was the boundary I began with. I also had to make assumptions on the camera position - to make my life easier I assume a laptop setup where the camera is at the top of the screen. This is a limitation but further work will be done to remove the assumption. Another idea I had was to use the Eye-Contact-CNN to label my data for me, but this did not produce great results. The looking bounds were too tight, the EyesOff model is useless if it only says you are looking if you look directly at the camera, having done this I realised the importance of <b>hand labelled data</b>.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+YuNet Quirks
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-3" class="callout-3-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>Quick note on YuNet, it struggled to detect faces in 1080 x 1920 images, however halving the resolution seemed to resolve the issue. I’m not sure what caused this.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="start-of-the-vcd-dataset" class="level3">
+<h3 class="anchored" data-anchor-id="start-of-the-vcd-dataset">Start of the VCD Dataset</h3>
+<p>Upon observing the limitations of the selfie dataset, namely low quality images and situations which were not close to the production environment of the EyesOff model, I began a search for new datasets. I found the Video Conferencing Dataset (VCD)<a href="#3"><sup>3</sup></a>. This dataset was created to evaluate video codecs for video conferencing. However, it is also perfect for the EyesOff use case, people in video calls smack in front of the webcam and occasionally looking around. The dataset contains 160 unique individuals in different video conferencing settings. I set to work labelling the dataset, the pipeline goes like this:</p>
+<pre><code>- Run videos frame by frame but only extract frames at a fixed interval. 
+  Extracting every single frame creates issues: firstly, most frames close to 
+  each other are the same (diversity in images is important). Also if you 
+  have a 30fps video which lasts 30 seconds, each video gives 900 frames. With 
+  160 videos you end up with 144,000 images to label!
+
+- Next we take YuNet and run it on the extracted frames, doing this we crop out the 
+  faces in each image. I added this step to utilise YuNet, because I love it,
+  but more importantly it's an amazing facial detection model and by using it to do the 
+  heavy work of detecting faces, we break up our task. YuNet handles facial detection 
+  and the EyesOff model only needs to predict if the face is looking or not. 
+  It also helps when multiple people are in the scene, making data collection much simpler 
+  (imagine having to label images where 3 people are looking but 2 are not, and how would 
+  we get diversity in such scenes).It's a bit hacky but it works, also in the production pipeline
+  this lets us handle things much easier, we'd get face crops and send them one at a
+  time to the EyesOff model, rather than dealing with multiple at once.
+
+- Then I take the face crops and run them through my labeller as before. 
+  The labeller was a small tool built to speed up this process, I did look into proper 
+  labelling tools such as label studio but found them too heavy for such a use case.
+  Using Claude I built a simple labeller, it shows one image at a time,
+  with 4 buttons: 1 = label "not looking", 2 = label "looking", 3 = skip and q = go back 
+  to previous image. At first labelling was a very slow process, but the more I labelled
+  the faster I got. By the end I could label around 1000 images in 15 minutes, 
+  to get this fast I would use skip pretty frequently, if a case is too ambiguous 
+  it makes more sense to skip it than to waste time labelling it. In the future I 
+  will go back and review the skipped cases correctly labelling them and adding them 
+  to the train set.
+
+- After labelling the images we can train the model! However we have to be careful 
+  in this process, I learnt that facial images need a train-test split.
+  By this I mean, the same face cannot appear in train and test, even
+  if the image is different. To see why this is required imagine the following: you 
+  have a face labelled in 100 different scenarios and poses but it is always looking,
+  the model may learn this particular face is always looking and as such when evaluating 
+  the test set the result is not reliable.</code></pre>
+<p>That’s it for the data labelling process for the VCD dataset! All in all I got 5900 images from the VCD dataset. Take a look at Figure 1 for the class distribution.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="building_EyesOff_part2_model_training_files/figure-html/ee99fd8f-bcc7-46b3-a99c-1a885faf2636-1-1484fd30-11f2-4274-9965-6c87c750ba60.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1 - Class distribution of VCD labelled images</figcaption>
+</figure>
+</div>
+<p>Time to discuss training details!</p>
+</section>
+</section>
+<section id="training-the-eyesoff-model" class="level2">
+<h2 class="anchored" data-anchor-id="training-the-eyesoff-model">Training the EyesOff Model</h2>
+<section id="model-choice" class="level3">
+<h3 class="anchored" data-anchor-id="model-choice">Model Choice</h3>
+<p>Given the nature of EyesOff, being an application which will always run in the background I want the model to be relatively small. YuNet satisfies this, having only 75856 parameters. For the EyesOff model I chose a pre-trained EfficientNetB0 model, which has 5288548 parameters, it is considerably larger than YuNet but still small enough to run on a CPU without affecting performance or draining battery too much.</p>
+<p>The decision to use EfficientNetB0 is arbitrary, I could use any other model or architecture and probably get similar or better results. It is definitely worthwhile trying other models. Ultimately however, I think the best approach would probably be to take the YuNet architecture and build the EyesOff model on that. YuNet is so strong for such a small model and I’m sure the architecture can be adapted to give great results in the EyesOff setting. This is future work I endeavour to undertake as the application is built out further.</p>
+</section>
+<section id="training-the-eyesoff-model---a-two-stage-approach" class="level3">
+<h3 class="anchored" data-anchor-id="training-the-eyesoff-model---a-two-stage-approach">Training the EyesOff Model - A Two Stage Approach</h3>
+<p>I follow the setup laid out in the Eye-Contact-CNN paper to train my model, with a few changes. The <b>two step</b> process takes a pre-trained ImageNet model as its base. In phase 1 we pre-train on a gaze regression task and in phase 2 we finetune on the screen contact classification task. This approach aids with generalisation. In phase 1, the model learns the relationship between gaze and where a person is looking, this guides the model in how it adapts to phase 2. Essentially, preventing the model from relying on how a face looks or the background etc, by forcing the model to consider the eyes and where they are looking.</p>
+<section id="phase-1" class="level4">
+<h4 class="anchored" data-anchor-id="phase-1">Phase 1</h4>
+<p>This approach is very clever, however following it wasn’t so straightforward. In phase 1, you need images of faces and the corresponding gaze vector labels. The gaze vector has two values, pitch and yaw. The paper used existing gaze datasets (MPIIFaceGaze, EYEDIAP and SynHead), instead of using these I <b>created a custom gaze regression dataset</b>. To do so, I took the selfie dataset and another dataset of dashcams recording drivers<a href="#4"><sup>4</sup></a> and created synthetic gaze vectors. The synthetic gaze vectors are created with a gaze estimation model provided by OpenVino, gaze_estimation_adas_0002 model<a href="#5"><sup>5</sup></a>. This model requires 3 inputs: left eye crop, right eye crop and the 3 headpose angles. These can be gotten using MediaPipe’s facial landmarker model<a href="#6"><sup>6</sup></a>. This model outputs a mesh of 478 landmarks and a facial transformation matrix. Using the former we can crop out the eyes and with the latter we get the headpose angles.</p>
+<p>Armed with the 3 inputs, we create the gaze vectors and then undertake phase 1 of training. In this phase most blocks of the pre-trained EfficientNetB0 are enabled. We freeze the first 4 blocks, accounting for roughly 5% of total parameter count (as can be seen in figure 2), so <b>95%</b> of the model’s weights are available to be updated.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="building_EyesOff_part2_model_training_files/figure-html/9c6fd4ed-bed1-47f5-bea2-4ddb73c1f642-1-91cc8eb3-7417-4ec5-97ff-984b599943ba.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2 - Parameter count for each block in EfficientNetB0</figcaption>
+</figure>
+</div>
+<p>The model is trained for 20 epochs (48000 images in the dataset), using a SmoothL1Loss, learning_rate=5e-5 and weight_decay=1e-4. By the end of training we reach an MAE of <span class="math inline">\(4.35\degree\)</span>, in the Eye-Contact-CNN paper <b>convergence for phase 1 is defined as an MAE of less than <span class="math inline">\(6\degree\)</span></b>. With phase 1 complete, we can move on to phase 2 and building the EyesOff model proper. An important caveat here, we used the OpenVino gaze estimation model, and as it is an estimation there is error here and our model is probably not as good as it can be. However, labelling 50k images myself with gaze vectors did not sound fun so here we are. Perhaps making use of the same datasets they did would improve the performance in phase 1 and the EyesOff model as a whole.</p>
+</section>
+<section id="phase-2" class="level4">
+<h4 class="anchored" data-anchor-id="phase-2">Phase 2</h4>
+<p>Phase 1 provides us a strong foundation to start from in phase 2. In phase 2, most of the network is frozen. We unfreeze blocks 7 and onwards which represent, <b>~30%</b> of the networks parameters. The model is trained for 20 epochs, using a BCEWithLogitsLoss, learning_rate=1e-5 and weight_decay=1e-4, on the 5900 images from the VCD dataset. It’s a pretty simple phase, but there is a little more to it.</p>
+<p>We employ a trick in phase 2, POS sampling. We provide a POS sampling weight, to the loss function, which determines the weight applied to positive samples (POS = positive) in the loss function. In our problem a positive sample is any for the “looking” class, i.e.&nbsp;we set looking label = 1 as it is the one we care about. The weight we apply is determined by:</p>
+<p><span class="math display">\[\text{POS\_weight} = \frac{\text{num\_not\_looking\_cases}}{\text{num\_looking\_cases}}\]</span></p>
+<p>This gives us a value between 0 and 1 if we have more looking cases, which as you can see in figure 1, we do. By doing this we underweight the loss values given by predicting looking, meaning it has less impact in the gradient update. POS_weight aims to deter the model from always predicting the majority class.</p>
+</section>
+</section>
+</section>
+<section id="evaluating-the-eyesoff-model" class="level2">
+<h2 class="anchored" data-anchor-id="evaluating-the-eyesoff-model">Evaluating the EyesOff Model</h2>
+<p>To evaluate the models I created a small test case, by taking some videos of a few people in different scenarios while looking at a laptop. Either while working and sitting in front of the laptop, or standing a few steps back. I also took one video where I look at and away from the screen but at trickier angles/positions. The three test cases are called close, mid and close_subtle respectively.</p>
+<p>The number of looking and not looking images for the 3 types of video are shown below. This is important as it informs us of whether or not the model is randomly guessing:</p>
+<section id="testing-dataset-splits" class="level3">
+<h3 class="anchored" data-anchor-id="testing-dataset-splits">Testing Dataset Splits</h3>
+<div id="tbl-testdata" class="quarto-float anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-testdata-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;1: Test Dataset Statistics
+</figcaption>
+<div aria-describedby="tbl-testdata-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 13%">
+<col style="width: 18%">
+<col style="width: 10%">
+<col style="width: 15%">
+<col style="width: 21%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Category</th>
+<th>Looking</th>
+<th>Not Looking</th>
+<th>Total</th>
+<th>Looking %</th>
+<th>Not Looking %</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>close</td>
+<td>961</td>
+<td>1175</td>
+<td>2136</td>
+<td>45.0%</td>
+<td>55.0%</td>
+</tr>
+<tr class="even">
+<td>close_subtle</td>
+<td>542</td>
+<td>254</td>
+<td>796</td>
+<td>68.1%</td>
+<td>31.9%</td>
+</tr>
+<tr class="odd">
+<td>mid</td>
+<td>746</td>
+<td>518</td>
+<td>1264</td>
+<td>59.0%</td>
+<td>41.0%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+<p>So, for the close model always guessing the majority class randomly would return 55% accuracy, for close_subtle 68% and for mid 59%. These accuracy scores are the baseline to beat.</p>
+<p>Let’s look deeper into the VCD EyesOff model, and compare the model trained using the phase 1 &amp; phase 2 approach, another trained with only phase 2 (i.e.&nbsp;assessing the impact of the gaze regression pre-train) and a model trained on only phase 2 and no POS_Weight.</p>
+<p>Take a look at Table 2:</p>
+<div id="tbl-performance" class="quarto-float anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-performance-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;2: Performance by Scenario (Average across all people)
+</figcaption>
+<div aria-describedby="tbl-performance-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="table">
+<thead>
+<tr class="header">
+<th>Scenario</th>
+<th>Model</th>
+<th>Accuracy</th>
+<th>F1 Score</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>CLOSE</td>
+<td>vcd_pretrain</td>
+<td>79.44%</td>
+<td>82.03%</td>
+</tr>
+<tr class="even">
+<td>CLOSE</td>
+<td>vcd_no_pretrain</td>
+<td>59.86%</td>
+<td>71.13%</td>
+</tr>
+<tr class="odd">
+<td>CLOSE</td>
+<td>vcd_no_pretrain_no_POS</td>
+<td>53.23%</td>
+<td>68.91%</td>
+</tr>
+<tr class="even">
+<td>MID</td>
+<td>vcd_pretrain</td>
+<td>49.93%</td>
+<td>37.33%</td>
+</tr>
+<tr class="odd">
+<td>MID</td>
+<td>vcd_no_pretrain</td>
+<td>52.48%</td>
+<td>39.75%</td>
+</tr>
+<tr class="even">
+<td>MID</td>
+<td>vcd_no_pretrain_no_POS</td>
+<td>57.22%</td>
+<td>70.13%</td>
+</tr>
+<tr class="odd">
+<td>CLOSE_SUBTLE</td>
+<td>vcd_pretrain</td>
+<td>56.78%</td>
+<td>68.95%</td>
+</tr>
+<tr class="even">
+<td>CLOSE_SUBTLE</td>
+<td>vcd_no_pretrain</td>
+<td>62.25%</td>
+<td>75.19%</td>
+</tr>
+<tr class="odd">
+<td>CLOSE_SUBTLE</td>
+<td>vcd_no_pretrain_no_POS</td>
+<td>68.09%</td>
+<td>81.02%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+<p>vcd_pretrain, with pre-training and POS, has the highest overall average accuracy at 64%. This shows that gaze pre-training has benefits and as such from now on all models will include pre-training + the POS parameter. Note than the model with no_POS does best at the close_subtle, but upon further inspection its accuracy is 68.09% the same as the looking % of images which is 68.1%. This indicates it is not better but rather all models struggle on this set of images - leading us to discover we need more data!</p>
+<p>Data is king in deep learning and it was only inevitable that our small dataset of VCD images would not be enough.</p>
+</section>
+<section id="getting-more-data" class="level3">
+<h3 class="anchored" data-anchor-id="getting-more-data">Getting More Data</h3>
+<p>I began collecting more data, gathering it from the following <a href="https://huggingface.co/datasets/YM2132/YouTube_cc_by_videos_with_faces">YouTube videos</a>, <b>NOTE these videos are all CC-BY licensed</b>. The images are high quality, with most faces close to the camera and some far away. I tried to collect small images from zoom meetings, as I thought small low quality images would act as people far away, we’ll see later this wasn’t the best method. It appears it’s best to provide the model with high quality images. Letting the model learn the relationship between the data and whether or not a face is looking<a href="#8"><sup>8</sup></a>.</p>
+<p>After labelling ~20k more images we end up with 10k good images to add to the original ~5000, and the other ~10k were skipped. As a result the dataset makeup changed, as seen in figure 3.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="building_EyesOff_part2_model_training_files/figure-html/6c475b74-a67d-493f-905e-4d27e0112063-1-c5a33e75-f2c5-412d-919e-c08016102cac.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3 - Class Distribution Including New Images</figcaption>
+</figure>
+</div>
+<p>The imbalance is slightly lessened + we have a lot more images - although the dataset is still relatively small. As EyesOff is developed further I hope to increase the size of this dataset further. Building the dataset has been very time consuming, with most time spent labelling images.</p>
+</section>
+<section id="re-evaluating-the-model" class="level3">
+<h3 class="anchored" data-anchor-id="re-evaluating-the-model">Re-evaluating the Model</h3>
+<p>This section discusses the results of the expanded data collection. To test if the data collection was successful, I ran a bunch of training runs each with different datasets. In each run, the model used is the same EfficientNetB0, the dataset just differs.</p>
+<p>The following 3 tables show the performance on each task by a variety of different models, we will walk through the data setup for each model. There are 7 different models which we have evaluate, I will list them below in the following format &lt;model_name&gt; - &lt;dataset setup&gt;.</p>
+<pre><code>- vcd_only - VCD dataset only
+- vcd_plus_v1 - VCD + v1 was my original extra data, it consists of lower quality and smaller images 
+- vcd_plus_v2 - VCD + v2 is the second set of extra data, consisting of high quality and large images (e.g. vlog style images)
+- vcd_plus_v2FULL - VCD + same as v2 but has more images, v2FULL has roughly 5000 more images than v2
+- vcd_plus_v1v2 - VCD + v1 and v2 
+- vcd_plus_v1_v2FULL - VCD + v1 and v2FULL
+- big_pretrain - VCD + vcd_plus_v2FULL, but in phase 1 I undertake a bigger pre-train, including both the selfie dataset and a driver awareness dataset</code></pre>
+<section id="evaluation-tables" class="level4">
+<h4 class="anchored" data-anchor-id="evaluation-tables">Evaluation Tables</h4>
+<p>Let’s discuss the highlights in each table</p>
+<div id="tbl-closetest" class="quarto-float anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-closetest-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;3: Close Test Set Evaluation
+</figcaption>
+<div aria-describedby="tbl-closetest-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="table">
+<thead>
+<tr class="header">
+<th>Model</th>
+<th>Accuracy</th>
+<th>F1 Score</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>vcd_only</td>
+<td>79.44%</td>
+<td>82.03%</td>
+</tr>
+<tr class="even">
+<td>vcd_plus_v1</td>
+<td>74.45%</td>
+<td>75.05%</td>
+</tr>
+<tr class="odd">
+<td>vcd_plus_v2</td>
+<td>74.35%</td>
+<td>75.03%</td>
+</tr>
+<tr class="even">
+<td>vcd_plus_v2FULL</td>
+<td>76.07%</td>
+<td>76.42%</td>
+</tr>
+<tr class="odd">
+<td>vcd_plus_v1v2</td>
+<td>73.07%</td>
+<td>71.75%</td>
+</tr>
+<tr class="even">
+<td>vcd_plus_v1_v2FULL</td>
+<td>73.75%</td>
+<td>72.67%</td>
+</tr>
+<tr class="odd">
+<td>big_pretrain</td>
+<td>79.78%</td>
+<td>80.95%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+<p>big_pretrain has the best performance, it performs much better than vcd_plus_v2FULL alone - probably because the extra pre-train lets the model learn the relation between eyes and headpose and gaze direction better. vcd_only has good close performance too, probably because it is the closest to true close images. I.e. someone sitting at a screen and looking at and around it. This is surprising as vcd_only has the fewest images.</p>
+<section id="mid-test" class="level6">
+<h6 class="anchored" data-anchor-id="mid-test">Mid Test</h6>
+<div id="tbl-midtest" class="quarto-float anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-midtest-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;4: Mid Test Set Evaluation
+</figcaption>
+<div aria-describedby="tbl-midtest-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="table">
+<thead>
+<tr class="header">
+<th>Model</th>
+<th>Accuracy</th>
+<th>F1 Score</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>vcd_only</td>
+<td>49.93%</td>
+<td>37.33%</td>
+</tr>
+<tr class="even">
+<td>vcd_plus_v1</td>
+<td>61.28%</td>
+<td>59.44%</td>
+</tr>
+<tr class="odd">
+<td>vcd_plus_v2</td>
+<td>70.69%</td>
+<td>68.31%</td>
+</tr>
+<tr class="even">
+<td>vcd_plus_v2FULL</td>
+<td>71.25%</td>
+<td>69.15%</td>
+</tr>
+<tr class="odd">
+<td>vcd_plus_v1v2</td>
+<td>69.77%</td>
+<td>71.30%</td>
+</tr>
+<tr class="even">
+<td>vcd_plus_v1_v2FULL</td>
+<td>74.37%</td>
+<td>76.89%</td>
+</tr>
+<tr class="odd">
+<td>big_pretrain</td>
+<td>67.74%</td>
+<td>58.89%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+<p>Here we see the real impact of adding more data, vcd_plus_v1_v2FULL has the best performance at mid range - this does make sense as v1 has the most mid range looking images. vcd_plus_v2FULL comes in second which is also interesting as no images here are really mid range looking.</p>
+</section>
+<section id="close-subtle-test" class="level6">
+<h6 class="anchored" data-anchor-id="close-subtle-test">Close Subtle Test</h6>
+<div id="tbl-closesubtletest" class="quarto-float anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-closesubtletest-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;5: Close Subtle Test Set Evaluation
+</figcaption>
+<div aria-describedby="tbl-closesubtletest-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="table">
+<thead>
+<tr class="header">
+<th>Model</th>
+<th>Accuracy</th>
+<th>F1 Score</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>vcd_only</td>
+<td>56.78%</td>
+<td>68.95%</td>
+</tr>
+<tr class="even">
+<td>vcd_plus_v1</td>
+<td>56.66%</td>
+<td>68.55%</td>
+</tr>
+<tr class="odd">
+<td>vcd_plus_v2</td>
+<td>57.91%</td>
+<td>68.66%</td>
+</tr>
+<tr class="even">
+<td>vcd_plus_v2FULL</td>
+<td>64.45%</td>
+<td>72.34%</td>
+</tr>
+<tr class="odd">
+<td>vcd_plus_v1v2</td>
+<td>59.30%</td>
+<td>69.61%</td>
+</tr>
+<tr class="even">
+<td>vcd_plus_v1_v2FULL</td>
+<td>61.43%</td>
+<td>70.79%</td>
+</tr>
+<tr class="odd">
+<td>big_pretrain</td>
+<td>65.95%</td>
+<td>73.41%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+<p>vcd_plus_v2FULL and big_pretrain come out on top here. This is the hardest case, it involves keeping headpose still and slightly looking to the side etc. As we improve the EyesOff model this will be a big area for improvement leading to a better user experience.</p>
+<p>So, if we bring all these results together we end up with the following models on top, as you probably guessed, vcd_plus_v2FULL and big_pretrain. Firstly, this highlights the importance of scale and secondly it is an amazing result! I am very happy to have trained a model which works, and one which exhibits some scaling laws.</p>
+<p>While big_pretrain has slightly better overall accuracy (71.16% vs 70.59%), I’m choosing vcd_plus_v2FULL because mid-range performance is critical for the shoulder surfing use case. This is where attackers are most likely to be positioned, and vcd_plus_v2FULL achieves 71.25% on mid-range vs big_pretrain’s 67.74% - a significant 3.5% improvement where it matters most.</p>
+</section>
+</section>
+</section>
+</section>
+<section id="next-steps" class="level2">
+<h2 class="anchored" data-anchor-id="next-steps">Next Steps</h2>
+<p>There is still much to do, as I go back to building the EyesOff Application ready for re-launch I leave some notes here for my future self. Regarding the model, first step would be to collect more data. Next up is to reduce the model size and increase efficiency and there are many ways to do this, one way would be to quantize the model or utilise the ONNX format to compile the model, the other more difficult but more fruitful path would be to utilise a better architecture. Something like the YuNet architecture but tuned for the EyesOff task.</p>
+<p>Thanks for reading and keep your eyes out for EyesOff!</p>
+<hr>
+<p><a id="1" style="text-decoration: none; color: inherit;" href=""><sup>1</sup></a><a href="https://github.com/rehg-lab/eye-contact-cnn">https://github.com/rehg-lab/eye-contact-cnn</a></p>
+<p><a id="2" style="text-decoration: none; color: inherit;" href=""><sup>2</sup></a><a href="https://www.kaggle.com/datasets/jigrubhatt/selfieimagedetectiondataset">https://www.kaggle.com/datasets/jigrubhatt/selfieimagedetectiondataset</a></p>
+<p><a id="3" style="text-decoration: none; color: inherit;" href=""><sup>3</sup></a><a href="https://github.com/microsoft/VCD">https://github.com/microsoft/VCD</a></p>
+<p><a id="4" style="text-decoration: none; color: inherit;" href=""><sup>4</sup></a><a href="https://www.kaggle.com/datasets/ismailnasri20/driver-drowsiness-dataset-ddd">https://www.kaggle.com/datasets/ismailnasri20/driver-drowsiness-dataset-ddd</a></p>
+<p><a id="5" style="text-decoration: none; color: inherit;" href=""><sup>5</sup></a><a href="https://docs.openvino.ai/2023.3/omz_models_model_gaze_estimation_adas_0002.html">https://docs.openvino.ai/2023.3/omz_models_model_gaze_estimation_adas_0002.html</a></p>
+<p><a id="6" style="text-decoration: none; color: inherit;" href=""><sup>6</sup></a><a href="https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker">https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker</a></p>
+<p><a id="7" style="text-decoration: none; color: inherit;" href=""><sup>7</sup></a><a href="mailto:y%75sufmohamma%64@l%69ve.com">yusufmohammad@live.com</a></p><a href="mailto:y%75sufmohamma%64@l%69ve.com">
+</a><p><a href="mailto:y%75sufmohamma%64@l%69ve.com"></a><a id="8" style="text-decoration: none; color: inherit;" href=""><sup>8</sup></a> I realised that perhaps we ought to have two models running, one for close range faces and another for far. This poses some issues, battery drain first as we run two models and also deciding the threshold for what is close and far becomes a challenge. You could have a model which has two brances and a decision model which decides which branch to send the image down, but until we reduce the size of the EyesOff model we have to proceed with one.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const disableStylesheet = (stylesheets) => {
+    for (let i=0; i < stylesheets.length; i++) {
+      const stylesheet = stylesheets[i];
+      stylesheet.rel = 'prefetch';
+    }
+  }
+  const enableStylesheet = (stylesheets) => {
+    for (let i=0; i < stylesheets.length; i++) {
+      const stylesheet = stylesheets[i];
+      stylesheet.rel = 'stylesheet';
+    }
+  }
+  const manageTransitions = (selector, allowTransitions) => {
+    const els = window.document.querySelectorAll(selector);
+    for (let i=0; i < els.length; i++) {
+      const el = els[i];
+      if (allowTransitions) {
+        el.classList.remove('notransition');
+      } else {
+        el.classList.add('notransition');
+      }
+    }
+  }
+  const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+    const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+    const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+    let newTheme = '';
+    if(darkModeDefault) {
+      newTheme = isAlternate ? baseTheme : alternateTheme;
+    } else {
+      newTheme = isAlternate ? alternateTheme : baseTheme;
+    }
+    const changeGiscusTheme = () => {
+      // From: https://github.com/giscus/giscus/issues/336
+      const sendMessage = (message) => {
+        const iframe = document.querySelector('iframe.giscus-frame');
+        if (!iframe) return;
+        iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+      }
+      sendMessage({
+        setConfig: {
+          theme: newTheme
+        }
+      });
+    }
+    const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+    if (isGiscussLoaded) {
+      changeGiscusTheme();
+    }
+  }
+  const toggleColorMode = (alternate) => {
+    // Switch the stylesheets
+    const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+    manageTransitions('#quarto-margin-sidebar .nav-link', false);
+    if (alternate) {
+      enableStylesheet(alternateStylesheets);
+      for (const sheetNode of alternateStylesheets) {
+        if (sheetNode.id === "quarto-bootstrap") {
+          toggleBodyColorMode(sheetNode);
+        }
+      }
+    } else {
+      disableStylesheet(alternateStylesheets);
+      toggleBodyColorPrimary();
+    }
+    manageTransitions('#quarto-margin-sidebar .nav-link', true);
+    // Switch the toggles
+    const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+    for (let i=0; i < toggles.length; i++) {
+      const toggle = toggles[i];
+      if (toggle) {
+        if (alternate) {
+          toggle.classList.add("alternate");     
+        } else {
+          toggle.classList.remove("alternate");
+        }
+      }
+    }
+    // Hack to workaround the fact that safari doesn't
+    // properly recolor the scrollbar when toggling (#1455)
+    if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+      manageTransitions("body", false);
+      window.scrollTo(0, 1);
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        manageTransitions("body", true);
+      }, 40);  
+    }
+  }
+  const isFileUrl = () => { 
+    return window.location.protocol === 'file:';
+  }
+  const hasAlternateSentinel = () => {  
+    let styleSentinel = getColorSchemeSentinel();
+    if (styleSentinel !== null) {
+      return styleSentinel === "alternate";
+    } else {
+      return false;
+    }
+  }
+  const setStyleSentinel = (alternate) => {
+    const value = alternate ? "alternate" : "default";
+    if (!isFileUrl()) {
+      window.localStorage.setItem("quarto-color-scheme", value);
+    } else {
+      localAlternateSentinel = value;
+    }
+  }
+  const getColorSchemeSentinel = () => {
+    if (!isFileUrl()) {
+      const storageValue = window.localStorage.getItem("quarto-color-scheme");
+      return storageValue != null ? storageValue : localAlternateSentinel;
+    } else {
+      return localAlternateSentinel;
+    }
+  }
+  const darkModeDefault = false;
+  let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+  // Dark / light mode switch
+  window.quartoToggleColorScheme = () => {
+    // Read the current dark / light value 
+    let toAlternate = !hasAlternateSentinel();
+    toggleColorMode(toAlternate);
+    setStyleSentinel(toAlternate);
+    toggleGiscusIfUsed(toAlternate, darkModeDefault);
+  };
+  // Ensure there is a toggle, if there isn't float one in the top right
+  if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+    const a = window.document.createElement('a');
+    a.classList.add('top-right');
+    a.classList.add('quarto-color-scheme-toggle');
+    a.href = "";
+    a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+    const i = window.document.createElement("i");
+    i.classList.add('bi');
+    a.appendChild(i);
+    window.document.body.appendChild(a);
+  }
+  // Switch to dark mode if need be
+  if (hasAlternateSentinel()) {
+    toggleColorMode(true);
+  } else {
+    toggleColorMode(false);
+  }
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+          // target, if specified
+          link.setAttribute("target", "_blank");
+          if (link.getAttribute("rel") === null) {
+            link.setAttribute("rel", "noopener");
+          }
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
