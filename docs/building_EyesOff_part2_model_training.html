@@ -160,7 +160,7 @@ TLDR
 </div>
 <section id="why-do-i-need-a-custom-model" class="level3">
 <h3 class="anchored" data-anchor-id="why-do-i-need-a-custom-model">Why Do I Need a Custom Model?</h3>
-<p>For the past 3 months I have been working to create a model to detect whether or not someone is looking at a screen. This blog recounts the steps I took to train such a model.</p>
+<p>For the past 3 months, I have been working to create a model to detect whether or not someone is looking at a screen. This blog recounts the steps I took to train such a model.</p>
 <p>I am building this model for <a href="https://www.eyesoff.app">EyesOff</a>. It’s an application which detects people looking at your screen. The aim is to keep you safe from shoulder surfing, utilising your webcam to give you the power to prevent snoopers.</p>
 <p>The first model I considered for the app was the Eye-Contact-CNN<a href="#1"><sup>1</sup></a>, which was trained to detect eye contact in children. However, due to its license I cannot use it in EyesOff. Also, this model is too restrictive, as it only classifies as looking if the person looks directly at the camera. Making the Eye-Contact-CNN too specific for EyesOff.</p>
 <p>Nevertheless, I am grateful to the authors as their paper is immensely useful in detailing its approach. Because I could not use it out of the box, it led me on a journey to build my own dataset &amp; model.</p>
