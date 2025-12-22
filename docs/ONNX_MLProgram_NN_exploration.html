@@ -483,7 +483,7 @@ FP16: 0.49975585937500000000
 Gap from threshold (0.5):
 FP32: 2.98e-08
 FP16: 2.44e-04</code></pre>
-<p>Taking this gap between 0.5 and the next reprsentable number below 0.5 in FP16 we can calculate the threshold for values which will get rounded up to 0.5:</p>
+<p>Taking this gap between 0.5 and the next representable number below 0.5 in FP16 we can calculate the threshold for values which will get rounded up to 0.5:</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Given the gap is 2.44e-04, we need to divide it by 2 and calculate the midpoint between 0.499755859375 and 0.5. This midpoint determines whether the FP16 value will be rounded down if below it or up it equal to or greater than. </span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert to FP32 as the midpoint is not representable in FP16</span></span>
